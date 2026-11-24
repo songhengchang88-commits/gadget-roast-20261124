@@ -36,3 +36,27 @@ def resolve_output_dir() -> Path:
     fallback_dir.mkdir(parents=True, exist_ok=True)
     return fallback_dir
 
+
+def validate_text(text: str) -> str:
+    """Validate text strictly and fail loudly if invalid."""
+    try:
+        raw_bytes = text.encode("utf-8")
+        decoded = raw_bytes.decode("utf-8")
+    except UnicodeError as exc:
+        sys.stderr.write(f"Validation error: text is not valid UTF-8: {exc}\n")
+        sys.exit(1)
+
+    codepoints = len(decoded)
+    if codepoints < 1 or codepoints > 200:
+        sys.stderr.write(
+            f"Validation error: text length {codepoints} code points is not within 1 to 200 code points\n"
+        )
+        sys.exit(1)
+
+    if not decoded.strip():
+        sys.stderr.write("Validation error: text is only whitespace\n")
+        sys.exit(1)
+
+    return decoded
+
+
