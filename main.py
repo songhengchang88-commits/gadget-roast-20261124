@@ -60,3 +60,61 @@ def validate_text(text: str) -> str:
     return decoded
 
 
+def atomic_write(target_path: Path, content: str) -> None:
+    """Write text atomically via temporary file and verify on-disk contents."""
+    target_dir = target_path.parent
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    temp_file = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=target_dir,
+        delete=False,
+        prefix="entry_",
+        suffix=".tmp",
+    )
+    temp_path = Path(temp_file.name)
+    try:
+        temp_file.write(content)
+        temp_file.flush()
+        os.fsync(temp_file.fileno())
+        temp_file.close()
+
+        temp_path.replace(target_path)
+    except Exception:
+        if temp_path.exists():
+            temp_path.unlink()
+        raise
+
+    # Read the file back to verify the on-disk bytes decode to exactly what was validated
+    with open(target_path, "rb") as f:
+        disk_bytes = f.read()
+
+    try:
+        disk_decoded = disk_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        sys.stderr.write(f"Verification error: on-disk bytes failed UTF-8 decode: {exc}\n")
+        sys.exit(1)
+
+    if disk_decoded != content:
+        sys.stderr.write("Verification error: on-disk content does not match validated text\n")
+        sys.exit(1)
+
+
+def main() -> None:
+    """Entry point: validate roast text, write entry.txt atomically, and verify."""
+    output_dir = resolve_output_dir()
+    target_file = output_dir / "entry.txt"
+
+    payload = ROAST_LINE + "\n"
+    validated = validate_text(payload)
+    atomic_write(target_file, validated)
+
+    print(f"Wrote {target_file} ({len(validated)} code points)")
+
+
+if __name__ == "__main__":
+    main()
+
+
+
